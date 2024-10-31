@@ -1,0 +1,113 @@
+const { Client } = require('@elastic/elasticsearch')
+// const fs = require('fs');
+// const https = require('https');
+
+// const caCert = fs.readFileSync('/home/ops/esdata/zerotrust.crt');
+
+// // 创建 HTTPS 代理，配置为信任自签名证书
+// const httpsAgent = new https.Agent({
+//   ca: caCert // 添加 CA 证书到 HTTPS 代理中
+// });
+
+const client = new Client({
+  node: 'http://127.0.0.1:9200'
+  //,
+  // connectionClass: https,
+  // httpsAgent: httpsAgent, // 使用配置了 CA 证书的 HTTPS 代理
+  // ssl: {
+  //     // 禁用 SSL 证书验证
+  //     rejectUnauthorized: false,
+  //     // 对于自签名证书，你可能还需要设置 ca: null 来避免 CA 证书错误
+  //     // 但这通常不是必需的，因为 rejectUnauthorized: false 已经足够了
+  //     ca: null,
+  //   },
+  // tls: {
+  //     rejectUnauthorized: false,
+  //     ca: null,
+  //   }
+  // auth: {
+  //     username: 'logstash_internal',
+  //     password: 'x-pack-12345',
+  // }
+})
+
+async function run() {
+  try {
+    const size = 25
+
+    const query = {
+        bool: {
+          must: [
+            // {
+            //   range: {
+            //     created_at: {
+            //       lte: '2024-10-22T09:12:50.886Z' // lte 表示 "less than or equal to"
+            //     }
+            //   }
+            // },
+            {
+              // match: {
+              //   ["name"]: {
+              //     query: 'zfgjip',
+              //     fuzziness: 'AUTO', // 使用自动模糊度，也可以设置为1或2
+              //     boost: 5 // 权重，影响排序
+              //   }
+              // }
+              match_all: {}
+            }
+          ]
+        }
+      };
+
+    const body = await client.search({
+      index: 'zero_trust',
+      body: {
+        query: query,
+        sort: [
+          { ["message.start_time"]: { order: "asc" } } // 排序字段及顺序
+        ],
+        // search_after: ['2024-10-22T09:14:35.000Z'],
+        size: 25
+      }
+    })
+
+    console.log(body)
+
+    ret = {
+      edges: [],
+      pageInfo: {}
+    }
+
+    body.hits.hits.forEach(function (element) {
+      // 遍历数组，对每个元素进行操作
+      console.log(element);
+      // if (!("startCursor" in ret.pageInfo)) {
+      //   ret.pageInfo.startCursor = element._id
+      // }
+      // ret.pageInfo.endCursor = element._id
+
+      ret.edges.push({
+        cursor: element._source.created_at,
+        node: element._source
+      })
+    });
+
+    /////////////
+    // console.log("endcursor",body.hits.hits.length > 0 ? body.hits.hits[body.hits.hits.length - 1].created : null);
+    // console.log("startcursor",body.hits.hits.length > 0 ? body.hits.hits[0].created : null);
+    // console.log("undefined",body.hahahaha);
+    /////////////
+
+    ret.pageInfo.startCursor = body.hits.hits.length > 0 ? body.hits.hits[0]._source.created : null
+    ret.pageInfo.endCursor = body.hits.hits.length > 0 ? body.hits.hits[body.hits.hits.length - 1]._source.created : null
+    ret.pageInfo.globalCount = body.hits.total.value
+    ret.pageInfo.hasNextPage = size >= ret.pageInfo.globalCount
+    ret.pageInfo.hasPreviousPage = false
+
+    console.log(ret)
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+run()
